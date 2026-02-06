@@ -14,8 +14,17 @@ import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.denireaux.life.ca.Automaton;
 import com.denireaux.life.ca.ConwayRule;
+import com.denireaux.life.ca.LifeWithoutDeathRule;
 import com.denireaux.life.input.PaintController;
 import com.denireaux.life.render.GridRenderer;
+
+// Left click	Paint alive
+// Right click	Erase
+// SPACE	Run / Pause
+// N	Step one tick
+// C	Clear grid
+// 1️1	Conway’s Life
+// 2	Life Without Death
 
 public class LifeItself extends ApplicationAdapter {
 
@@ -44,11 +53,8 @@ public class LifeItself extends ApplicationAdapter {
     public void create() {
         camera = new OrthographicCamera();
 
-        // World units = pixels in this setup (because we draw pixel*CELL_SIZE)
         viewport = new FitViewport(GRID_W * CELL_SIZE, GRID_H * CELL_SIZE, camera);
         viewport.apply();
-
-        // IMPORTANT: sync viewport to actual window size on startup (fixes "nothing draws until resize")
         viewport.update(Gdx.graphics.getWidth(), Gdx.graphics.getHeight(), true);
         camera.update();
 
@@ -56,13 +62,12 @@ public class LifeItself extends ApplicationAdapter {
         pixel = make1x1Pixel();
 
         automaton = new Automaton(GRID_W, GRID_H, new ConwayRule());
-        renderer = new GridRenderer(pixel, CELL_SIZE, new Color(1.0f, 1.0f, 1.0f, 1f));
+        renderer = new GridRenderer(pixel, CELL_SIZE, Color.WHITE);
         painter = new PaintController(viewport, CELL_SIZE);
 
         Gdx.input.setInputProcessor(new InputAdapter() {
             @Override
             public boolean touchDragged(int screenX, int screenY, int pointer) {
-                // drag uses "left if down else erase"
                 automatonPaint(painter.isLeftDown());
                 return true;
             }
@@ -77,14 +82,19 @@ public class LifeItself extends ApplicationAdapter {
 
     @Override
     public void render() {
-        // Controls
+        // Core controls
         if (Gdx.input.isKeyJustPressed(Input.Keys.SPACE)) running = !running;
         if (Gdx.input.isKeyJustPressed(Input.Keys.C)) automaton.clear();
         if (!running && Gdx.input.isKeyJustPressed(Input.Keys.N)) automaton.step();
 
+        // Rule switching
+        if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_1))
+            automaton.setRule(new ConwayRule());
+        if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_2))
+            automaton.setRule(new LifeWithoutDeathRule());
+
         float dt = Gdx.graphics.getDeltaTime();
 
-        // Pause stepping while painting so cells don't "disappear instantly"
         boolean painting =
                 Gdx.input.isButtonPressed(Input.Buttons.LEFT) ||
                 Gdx.input.isButtonPressed(Input.Buttons.RIGHT);
