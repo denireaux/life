@@ -21,7 +21,7 @@ public class LifeItself extends ApplicationAdapter {
 
     private static final int GRID_W = 300;
     private static final int GRID_H = 200;
-    private static final int CELL_SIZE = 4;
+    private static final int CELL_SIZE = 1;
 
     private OrthographicCamera camera;
     private Viewport viewport;
@@ -33,27 +33,37 @@ public class LifeItself extends ApplicationAdapter {
     private GridRenderer renderer;
     private PaintController painter;
 
-    private boolean running = true;
+    // Start paused so painting is obvious
+    private boolean running = false;
+
+    // Fixed tick rate for CA stepping
+    private float tickSeconds = 1f / 20f; // 20 ticks/sec
+    private float tickAccumulator = 0f;
 
     @Override
     public void create() {
         camera = new OrthographicCamera();
+
+        // World units = pixels in this setup (because we draw pixel*CELL_SIZE)
         viewport = new FitViewport(GRID_W * CELL_SIZE, GRID_H * CELL_SIZE, camera);
         viewport.apply();
-        camera.position.set((GRID_W * CELL_SIZE) / 2f, (GRID_H * CELL_SIZE) / 2f, 0);
+
+        // IMPORTANT: sync viewport to actual window size on startup (fixes "nothing draws until resize")
+        viewport.update(Gdx.graphics.getWidth(), Gdx.graphics.getHeight(), true);
         camera.update();
 
         batch = new SpriteBatch();
         pixel = make1x1Pixel();
 
         automaton = new Automaton(GRID_W, GRID_H, new ConwayRule());
-        renderer = new GridRenderer(pixel, CELL_SIZE, new Color(0.0f, 0.9f, 1.0f, 1f));
+        renderer = new GridRenderer(pixel, CELL_SIZE, new Color(1.0f, 1.0f, 1.0f, 1f));
         painter = new PaintController(viewport, CELL_SIZE);
 
         Gdx.input.setInputProcessor(new InputAdapter() {
             @Override
             public boolean touchDragged(int screenX, int screenY, int pointer) {
-                automatonPaint();
+                // drag uses "left if down else erase"
+                automatonPaint(painter.isLeftDown());
                 return true;
             }
 
@@ -67,11 +77,25 @@ public class LifeItself extends ApplicationAdapter {
 
     @Override
     public void render() {
+        // Controls
         if (Gdx.input.isKeyJustPressed(Input.Keys.SPACE)) running = !running;
         if (Gdx.input.isKeyJustPressed(Input.Keys.C)) automaton.clear();
         if (!running && Gdx.input.isKeyJustPressed(Input.Keys.N)) automaton.step();
 
-        if (running) automaton.step();
+        float dt = Gdx.graphics.getDeltaTime();
+
+        // Pause stepping while painting so cells don't "disappear instantly"
+        boolean painting =
+                Gdx.input.isButtonPressed(Input.Buttons.LEFT) ||
+                Gdx.input.isButtonPressed(Input.Buttons.RIGHT);
+
+        if (running && !painting) {
+            tickAccumulator += dt;
+            while (tickAccumulator >= tickSeconds) {
+                automaton.step();
+                tickAccumulator -= tickSeconds;
+            }
+        }
 
         Gdx.gl.glClearColor(0, 0, 0, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
@@ -82,13 +106,14 @@ public class LifeItself extends ApplicationAdapter {
         batch.end();
     }
 
-    private void automatonPaint() {
-        // drag uses “left if down else erase”
-        automatonPaint(painter.isLeftDown());
-    }
-
     private void automatonPaint(boolean makeAlive) {
         painter.paintFromMouse(automaton, makeAlive);
+    }
+
+    @Override
+    public void resize(int width, int height) {
+        viewport.update(width, height, true);
+        camera.update();
     }
 
     private Texture make1x1Pixel() {
